@@ -1,4 +1,5 @@
-IMAGE=tyz910/sdsj2018
+#IMAGE=tyz910/sdsj2018
+IMAGE=vykhand/sdsj2018
 DOWNLOAD_URL=https://s3.eu-central-1.amazonaws.com/sdsj2018-automl/public/sdsj2018_automl_check_datasets.zip
 
 ifeq ($(OS), Windows_NT)

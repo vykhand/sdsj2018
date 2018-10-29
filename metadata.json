@@ -1,5 +1,5 @@
 {
-    "image": "{image}",
+    "image": "vykhand/sdsj2018:latest",
     "entry_points": {
         "train_classification": "python3 main.py --mode classification --train-csv {train_csv} --model-dir {model_dir}",
         "train_regression": "python3 main.py --mode regression --train-csv {train_csv} --model-dir {model_dir}",
