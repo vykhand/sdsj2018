@@ -1,6 +1,8 @@
 import argparse
 from lib.util import timeit
 from lib.automl import AutoML
+import os
+import lib.util as u
 
 
 @timeit
@@ -21,6 +23,10 @@ def main():
     elif args.test_csv is not None:
         automl.load()
         automl.predict(args.test_csv, args.prediction_csv)
+
+    if "TIME_LIMIT" in os.environ:
+        u.log("Time limit is {}".format(os.environ["TIME_LIMIT"]))
+
     else:
         exit(1)
 

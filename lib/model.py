@@ -3,7 +3,7 @@ import numpy as np
 import lightgbm as lgb
 import hyperopt
 from hyperopt import hp, tpe, STATUS_OK, space_eval, Trials
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import mean_squared_error, roc_auc_score
 from lib.util import timeit, log, Config
 from typing import List, Dict
@@ -50,16 +50,37 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
     X_sample, y_sample = data_sample(X, y)
     hyperparams = hyperopt_lightgbm(X_sample, y_sample, params, config)
 
-    X_train, X_val, y_train, y_val = data_split(X, y)
-    train_data = lgb.Dataset(X_train, label=y_train)
-    valid_data = lgb.Dataset(X_val, label=y_val)
-
-    config["model"] = lgb.train({**params, **hyperparams}, train_data, 3000, valid_data, early_stopping_rounds=50, verbose_eval=100)
-
+    n_split = 4
+    config["n_split"] = n_split
+    kf = KFold(n_splits=n_split, random_state=2018, shuffle=True)
+    config["model"] = []
+    oofs = np.zeros((X.shape[0],))
+    scores = []
+    for i, (train_ind, test_ind) in enumerate(kf.split(X)):
+        X_train, X_val = X.iloc[train_ind, :], X.iloc[test_ind,:]
+        y_train, y_val = y[train_ind], y[test_ind]
+        train_data = lgb.Dataset(X_train, label=y_train)
+        valid_data = lgb.Dataset(X_val, label=y_val)
+        mdl = lgb.train({**params, **hyperparams},
+                                         train_data, 3000, valid_data,
+                                         early_stopping_rounds=50, verbose_eval=100)
+        config["model"].append(mdl)
+        oof = mdl.predict(X_val)
+        oofs[test_ind] = oof
+        if config["mode"] == "regression":
+            score = np.sqrt(mean_squared_error(y_val, oof ))
+        else:
+            score = roc_auc_score(y_val,oof )
+        scores.append(score)
+        log(f"FOLD: {i}, Score: {round(score,2)}")
+    log(f"Total score: {np.mean(scores)} , std: {np.std(scores)}")
 
 @timeit
 def predict_lightgbm(X: pd.DataFrame, config: Config) -> List:
-    return config["model"].predict(X)
+    preds = np.zeros((config["n_split"], X.shape[0]))
+    for i, mdl in enumerate(config["model"]):
+        preds[i,:] = mdl.predict(X)
+    return list(np.mean(preds, 0))
 
 
 @timeit
@@ -70,14 +91,14 @@ def hyperopt_lightgbm(X: pd.DataFrame, y: pd.Series, params: Dict, config: Confi
 
     space = {
         "learning_rate": hp.uniform("learning_rate", 0.01, 0.05),
-        "max_depth": hp.choice("max_depth", [-1, 2, 3, 4, 5, 6]),
+        "max_depth": hp.choice("max_depth", [-1, 4,  6, 10, 16]),
         "num_leaves": hp.choice("num_leaves", np.linspace(10, 200, 50, dtype=int)),
         "feature_fraction": hp.quniform("feature_fraction", 0.5, 1.0, 0.1),
         "bagging_fraction": hp.quniform("bagging_fraction", 0.5, 1.0, 0.1),
         "bagging_freq": hp.choice("bagging_freq", np.linspace(0, 50, 10, dtype=int)),
         "reg_alpha": hp.uniform("reg_alpha", 0, 30),
         "reg_lambda": hp.uniform("reg_lambda", 0, 30),
-        "min_child_weight": hp.uniform('min_child_weight', 0.5, 10),
+        "min_child_weight": hp.uniform('min_child_weight', 0.5, 50),
     }
 
     def objective(hyperparams):
