@@ -15,9 +15,9 @@ def train(X: pd.DataFrame, y: pd.Series, config: Config):
     if "leak" in config:
         return
 
-    if (X.shape[0] > config["h2o_max_rows"]) or X.shape[1] > config["h2o_max_cols"] :
-        log("DF shape {X.shape} > {config['h2o_max_rows']},{config['h2o_max_cols']}. H2O training OFF")
-        config["train_h2o"] = False
+
+    log(f"DF shape {X.shape}, h2o config: {config['h2o_max_rows']},{config['h2o_max_cols']}.")
+
 
     train_lightgbm(X, y, config)
     time_spent = (time.time() - config["start_time"])
@@ -26,6 +26,9 @@ def train(X: pd.DataFrame, y: pd.Series, config: Config):
     log(f"Time limit: {config['time_limit']}, Time spent: {time_spent:.2f}, Time left: {time_left:.2f}")
 
     time_needed = (config["h2o_min_time_allowance"] + config["other_time_allowance"])
+
+    if (X.shape[0] > config["h2o_max_rows"]) or X.shape[1] > config["h2o_max_cols"]:
+        config["train_h2o"] = False
 
     if config["train_h2o"] and (time_left > time_needed):
         config["h2o_time_allowance"] = int(config["h2o_time_coeff"] * min(config["h2o_max_time_allowance"],
@@ -91,7 +94,7 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
         time_left = max(0, (config["time_limit"] - time_spent))
 
         # reserving time for h2o if needed
-        if config["train_h2o"] and (time_left > time_reserved): time_left = max(0, time_left - time_reserved)
+        #if config["train_h2o"] and (time_left > time_reserved): time_left = max(0, time_left - time_reserved)
 
         max_iter_time = max(iter_times) if len(iter_times) > 0 else 0
         #assume iterations take same time. if no time left, break

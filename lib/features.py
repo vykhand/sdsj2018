@@ -38,5 +38,9 @@ def select_features(X: pd.DataFrame, y: pd.Series, mode: str, n_estimators: int=
         feat_selector.fit(X.values, y.values.ravel())
     except TypeError:
         pass
+    if hasattr(feat_selector, "support_"):
+        ret = X.columns[feat_selector.support_].tolist()
+    else:
+        ret = []
 
-    return X.columns[feat_selector.support_].tolist()
+    return ret

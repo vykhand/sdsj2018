@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from sklearn.exceptions import DataConversionWarning
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from lib.features import select_features
 from lib.util import timeit, log, Config
@@ -12,6 +12,7 @@ from lib.util import timeit, log, Config
 
 @timeit
 def preprocess(df: pd.DataFrame, config: Config):
+    label_encode_id_cols(df, config)
     feature_selection(df, config)
     preprocess_pipeline(df, config)
 
@@ -30,6 +31,12 @@ def preprocess_pipeline(df: pd.DataFrame, config: Config):
     transform_categorical(df, config)
     scale(df, config)
     subsample(df, config, max_size_mb=2 * 1024)
+
+@timeit
+def label_encode_id_cols(df: pd.DataFrame, config: Config):
+    id_text_cols = df.columns[(df.dtypes == "object") & df.columns.str.startswith("id_")].tolist()
+    for c in id_text_cols:
+        df[c] = LabelEncoder().fit_transform(df[c])
 
 
 @timeit
@@ -179,7 +186,7 @@ def feature_selection(df: pd.DataFrame, config: Config):
             X = df_sample.drop("target", axis=1)
 
             if len(selected_columns) > 0:
-                X = X.drop(selected_columns, axis=1)
+                X = X.drop([cl for cl in selected_columns if cl in df.columns], axis=1)
 
             if len(X.columns) > 0:
                 selected_columns += select_features(X, y, config["mode"])
@@ -188,7 +195,8 @@ def feature_selection(df: pd.DataFrame, config: Config):
 
         log("Selected columns: {}".format(selected_columns))
 
-        drop_number_columns = [c for c in df if (c.startswith("number_") or c.startswith("id_")) and c not in selected_columns]
+        drop_number_columns = [c for c in df if (c.startswith("number_") or c.startswith("id_")) and \
+                               c not in selected_columns]
         if len(drop_number_columns) > 0:
             config["drop_number_columns"] = drop_number_columns
 

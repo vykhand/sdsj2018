@@ -13,7 +13,7 @@ ifeq ($(DATASET),)
 endif
 
 DATASET_MODE=_c
-ifeq ($(DATASET), $(filter $(DATASET), 1 2 3))
+ifeq ($(DATASET), $(filter $(DATASET), 1 2 3 9))
 	DATASET_MODE=_r
 endif
 
