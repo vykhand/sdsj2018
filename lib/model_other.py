@@ -5,7 +5,7 @@ import h2o
 from h2o.automl import H2OAutoML
 from vowpalwabbit.sklearn_vw import tovw
 from sklearn.linear_model import LogisticRegression, Ridge
-from lib.util import timeit, Config
+from lib.util import timeit, Config, log
 from typing import List
 
 
@@ -94,6 +94,7 @@ def train_h2o(X: pd.DataFrame, y: pd.Series, config: Config):
 
     if config["mode"] == "classification":
         train[train_y] = train[train_y].asfactor()
+
 
     aml = H2OAutoML(max_runtime_secs= config["h2o_time_allowance"] )
     aml.train(x=train_x, y=train_y, training_frame=train)

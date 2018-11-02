@@ -6,10 +6,6 @@ from typing import Any
 nesting_level = 0
 is_start = None
 
-global_start_time = time.time()
-global_time_limit = int(os.environ.get("TIME_LIMIT", 300))
-
-
 def timeit(method):
     def timed(*args, **kw):
         global is_start
@@ -50,12 +46,15 @@ class Config:
             "n_split": 7,
             "start_time": time.time(),
             "time_limit": int(os.environ.get("TIME_LIMIT", 5 * 60)),
+            "train_h2o": True,
+            "h2o_max_rows": 1e6,
+            "h2o_max_cols": 100,
             "h2o_min_time_allowance": 60,
-            "h2o_time_coeff": 0.6,
+            "h2o_time_coeff": 0.8,
             "h2o_max_time_allowance": 1e6,
-            "other_time_allowance": 30,
-            "lgbm_weight": 0.5,
-            "h2o_weight": 0.5,
+            "other_time_allowance": 20,
+            "lgbm_weight": 0.7,
+            "h2o_weight": 0.3,
             "h2o_trained": False,
             "iter_time_coeff": 1.05
         }

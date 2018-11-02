@@ -5,7 +5,7 @@ import hyperopt
 from hyperopt import hp, tpe, STATUS_OK, space_eval, Trials
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import mean_squared_error, roc_auc_score
-from lib.util import timeit, log, Config, global_time_limit, global_start_time
+from lib.util import timeit, log, Config
 from typing import List, Dict
 import time
 from .model_other import train_h2o, predict_h2o
@@ -14,20 +14,24 @@ from .model_other import train_h2o, predict_h2o
 def train(X: pd.DataFrame, y: pd.Series, config: Config):
     if "leak" in config:
         return
-    global global_start_time
-    global global_time_limit
+
+    if (X.shape[0] > config["h2o_max_rows"]) or X.shape[1] > config["h2o_max_cols"] :
+        log("DF shape {X.shape} > {config['h2o_max_rows']},{config['h2o_max_cols']}. H2O training OFF")
+        config["train_h2o"] = False
 
     train_lightgbm(X, y, config)
-    time_spent = (time.time() - global_start_time)
-    time_left = (global_time_limit - time_spent)
+    time_spent = (time.time() - config["start_time"])
+    time_left = (config["time_limit"] - time_spent)
+
+    log(f"Time limit: {config['time_limit']}, Time spent: {time_spent:.2f}, Time left: {time_left:.2f}")
+
     time_needed = (config["h2o_min_time_allowance"] + config["other_time_allowance"])
-    log(f"Time limit: {global_time_limit}, Time spent: {time_spent:.2f}, Time left: {time_left:.2f}")
-    if time_left > time_needed:
+
+    if config["train_h2o"] and (time_left > time_needed):
         config["h2o_time_allowance"] = int(config["h2o_time_coeff"] * min(config["h2o_max_time_allowance"],
                                            time_left - config["other_time_allowance"]))
 
         log(f"Training h2o with time limit: {config['h2o_time_allowance']}")
-
         train_h2o(X, y, config)
         config["h2o_trained"] = True
 
@@ -82,10 +86,12 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
     iter_time = 0
     iter_times = []
     for i, (train_ind, test_ind) in enumerate(kf.split(X)):
-        time_spent = (time.time() - global_start_time)
+        time_spent = (time.time() - config["start_time"])
 
-        time_left = max(0, (global_time_limit - time_spent))
-        if time_left > time_reserved: time_left = max(0, time_left - time_reserved)
+        time_left = max(0, (config["time_limit"] - time_spent))
+
+        # reserving time for h2o if needed
+        if config["train_h2o"] and (time_left > time_reserved): time_left = max(0, time_left - time_reserved)
 
         max_iter_time = max(iter_times) if len(iter_times) > 0 else 0
         #assume iterations take same time. if no time left, break
