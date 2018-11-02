@@ -5,16 +5,31 @@ import hyperopt
 from hyperopt import hp, tpe, STATUS_OK, space_eval, Trials
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import mean_squared_error, roc_auc_score
-from lib.util import timeit, log, Config
+from lib.util import timeit, log, Config, global_time_limit, global_start_time
 from typing import List, Dict
-
+import time
+from .model_other import train_h2o, predict_h2o
 
 @timeit
 def train(X: pd.DataFrame, y: pd.Series, config: Config):
     if "leak" in config:
         return
+    global global_start_time
+    global global_time_limit
 
     train_lightgbm(X, y, config)
+    time_spent = (time.time() - global_start_time)
+    time_left = (global_time_limit - time_spent)
+    time_needed = (config["h2o_min_time_allowance"] + config["other_time_allowance"])
+    log(f"Time limit: {global_time_limit}, Time spent: {time_spent:.2f}, Time left: {time_left:.2f}")
+    if time_left > time_needed:
+        config["h2o_time_allowance"] = int(config["h2o_time_coeff"] * min(config["h2o_max_time_allowance"],
+                                           time_left - config["other_time_allowance"]))
+
+        log(f"Training h2o with time limit: {config['h2o_time_allowance']}")
+
+        train_h2o(X, y, config)
+        config["h2o_trained"] = True
 
 
 @timeit
@@ -23,6 +38,11 @@ def predict(X: pd.DataFrame, config: Config) -> List:
         preds = predict_leak(X, config)
     else:
         preds = predict_lightgbm(X, config)
+
+        if config["h2o_trained"]:
+            preds_h2o = np.array(predict_h2o(X, config))
+            preds = list((config["lgbm_weight"] * np.array(preds) + config["h2o_weight"] * preds_h2o))
+
         if config["non_negative_target"]:
             preds = [max(0, p) for p in preds]
 
@@ -50,13 +70,32 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
     X_sample, y_sample = data_sample(X, y)
     hyperparams = hyperopt_lightgbm(X_sample, y_sample, params, config)
 
-    n_split = 4
-    config["n_split"] = n_split
+    n_split = config["n_split"]
     kf = KFold(n_splits=n_split, random_state=2018, shuffle=True)
     config["model"] = []
     oofs = np.zeros((X.shape[0],))
     scores = []
+
+    time_reserved = (config["h2o_min_time_allowance"] + config["other_time_allowance"])
+
+    train_start = time.time()
+    iter_time = 0
+    iter_times = []
     for i, (train_ind, test_ind) in enumerate(kf.split(X)):
+        time_spent = (time.time() - global_start_time)
+
+        time_left = max(0, (global_time_limit - time_spent))
+        if time_left > time_reserved: time_left = max(0, time_left - time_reserved)
+
+        max_iter_time = max(iter_times) if len(iter_times) > 0 else 0
+        #assume iterations take same time. if no time left, break
+        if max_iter_time * config["iter_time_coeff"] > time_left:
+            break
+
+
+
+        iter_start  = time.time()
+
         X_train, X_val = X.iloc[train_ind, :], X.iloc[test_ind,:]
         y_train, y_val = y[train_ind], y[test_ind]
         train_data = lgb.Dataset(X_train, label=y_train)
@@ -72,7 +111,10 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
         else:
             score = roc_auc_score(y_val,oof )
         scores.append(score)
-        log(f"FOLD: {i}, Score: {round(score,2)}")
+        iter_time = time.time() - iter_start
+        iter_times.append(iter_time)
+        log(f"FOLD: {i}, Score: {round(score,2)} , time: {iter_time:.2f}")
+
     log(f"Total score: {np.mean(scores)} , std: {np.std(scores)}")
 
 @timeit

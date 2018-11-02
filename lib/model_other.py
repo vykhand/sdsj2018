@@ -95,7 +95,7 @@ def train_h2o(X: pd.DataFrame, y: pd.Series, config: Config):
     if config["mode"] == "classification":
         train[train_y] = train[train_y].asfactor()
 
-    aml = H2OAutoML(max_runtime_secs=60)
+    aml = H2OAutoML(max_runtime_secs= config["h2o_time_allowance"] )
     aml.train(x=train_x, y=train_y, training_frame=train)
 
     config["model_h2o"] = h2o.save_model(model=aml.leader, path=config.model_dir + "/h2o.model", force=True)

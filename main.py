@@ -4,7 +4,6 @@ from lib.automl import AutoML
 import os
 import lib.util as u
 
-
 @timeit
 def main():
     parser = argparse.ArgumentParser()
