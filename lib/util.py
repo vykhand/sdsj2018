@@ -43,20 +43,29 @@ class Config:
         self.model_dir = model_dir
         self.tmp_dir = model_dir
         self.data = {
-            "n_split": 7,
+            "n_split_lgb": 4,
+            "n_split_xgb": 4,
+            "n_split_ctb": 5,
+            "train_xgb": True,
+            "xgb_min_time_allowance": 60,
+            "ctb_min_time_allowance": 60,
+            "lgb_min_time_allowance_pct": 0.6,
+            "xgb_max_time_allowance_pct": 0.2,
+            "ctb_max_time_allowance_pct": 0.2,
             "start_time": time.time(),
             "time_limit": int(os.environ.get("TIME_LIMIT", 5 * 60)),
-            "train_h2o": True,
+            "train_h2o": False,
             "h2o_max_rows": 300000,
             "h2o_max_cols": 100,
             "h2o_min_time_allowance": 60,
             "h2o_time_coeff": 0.7,
             "h2o_max_time_allowance": 600,
             "other_time_allowance": 20,
-            "lgbm_weight": 0.5,
-            "h2o_weight": 0.5,
+            "lgbm_weight": 0.6,
+            "h2o_weight": 0.15,
+            "xgb_weight": 0.4,
             "h2o_trained": False,
-            "iter_time_coeff": 1.05
+            "iter_time_coeff": 1.15
         }
 
     def is_train(self) -> bool:

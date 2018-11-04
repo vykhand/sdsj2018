@@ -111,3 +111,5 @@ def predict_h2o(X: pd.DataFrame, config: Config) -> List:
     model = h2o.load_model(config["model_h2o"])
 
     return model.predict(h2o.H2OFrame(X)).as_data_frame()["predict"].tolist()
+
+

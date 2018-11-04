@@ -9,6 +9,7 @@ from lib.util import timeit, log, Config
 from typing import List, Dict
 import time
 from .model_other import train_h2o, predict_h2o
+from .model_xgb import train_xgboost, predict_xgboost
 
 @timeit
 def train(X: pd.DataFrame, y: pd.Series, config: Config):
@@ -30,6 +31,9 @@ def train(X: pd.DataFrame, y: pd.Series, config: Config):
     if (X.shape[0] > config["h2o_max_rows"]) or X.shape[1] > config["h2o_max_cols"]:
         config["train_h2o"] = False
 
+    if config["train_xgb"] and (time_left > config["xgb_min_time_allowance"]):
+        train_xgboost(X, y, config)
+
     if config["train_h2o"] and (time_left > time_needed):
         config["h2o_time_allowance"] = int(config["h2o_time_coeff"] * min(config["h2o_max_time_allowance"],
                                            time_left - config["other_time_allowance"]))
@@ -37,6 +41,8 @@ def train(X: pd.DataFrame, y: pd.Series, config: Config):
         log(f"Training h2o with time limit: {config['h2o_time_allowance']}")
         train_h2o(X, y, config)
         config["h2o_trained"] = True
+
+
 
 
 @timeit
@@ -49,6 +55,10 @@ def predict(X: pd.DataFrame, config: Config) -> List:
         if config["h2o_trained"]:
             preds_h2o = np.array(predict_h2o(X, config))
             preds = list((config["lgbm_weight"] * np.array(preds) + config["h2o_weight"] * preds_h2o))
+
+        if config["xgb_trained"]:
+            preds_xgb= np.array(predict_xgboost(X, config))
+            preds = list((config["lgbm_weight"] * np.array(preds) + config["xgb_weight"] * preds_xgb))
 
         if config["non_negative_target"]:
             preds = [max(0, p) for p in preds]
@@ -77,15 +87,14 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
     X_sample, y_sample = data_sample(X, y)
     hyperparams = hyperopt_lightgbm(X_sample, y_sample, params, config)
 
-    n_split = config["n_split"]
+    n_split = config["n_split_lgb"]
     kf = KFold(n_splits=n_split, random_state=2018, shuffle=True)
     config["model"] = []
     oofs = np.zeros((X.shape[0],))
     scores = []
 
-    time_reserved = (config["h2o_min_time_allowance"] + config["other_time_allowance"])
+    #time_reserved = (config["h2o_min_time_allowance"] + config["other_time_allowance"])
 
-    train_start = time.time()
     iter_time = 0
     iter_times = []
     for i, (train_ind, test_ind) in enumerate(kf.split(X)):
@@ -128,7 +137,7 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, config: Config):
 
 @timeit
 def predict_lightgbm(X: pd.DataFrame, config: Config) -> List:
-    preds = np.zeros((config["n_split"], X.shape[0]))
+    preds = np.zeros((config["n_split_lgb"], X.shape[0]))
     for i, mdl in enumerate(config["model"]):
         preds[i,:] = mdl.predict(X)
     return list(np.mean(preds, 0))
